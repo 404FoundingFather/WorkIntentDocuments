@@ -1,0 +1,178 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wid.dev/schema/wid-frontmatter.schema.json",
+  "title": "WID Frontmatter",
+  "description": "Schema for Work Intent Document YAML frontmatter. Validates the structured metadata block at the top of every WID file.",
+  "type": "object",
+  "required": ["id", "title", "type", "status", "created", "author"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^WID-[0-9]{3,}$",
+      "description": "Unique identifier. Format: WID-NNN (zero-padded, minimum 3 digits). The authoritative identity of this WID — filenames and slugs are informational only."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "Human-readable title. Should be concise but specific enough to distinguish from related WIDs."
+    },
+    "type": {
+      "type": "string",
+      "enum": ["epic", "feature", "task", "bug", "spike", "chore"],
+      "description": "Work type. Determines valid parent/child relationships and influences execution strategy."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "ready", "in-progress", "review", "done", "cancelled"],
+      "description": "Current lifecycle state. Typically written by the inference engine based on activity signals; humans rarely set this directly. Transitions: draft → ready → in-progress → review → done. 'cancelled' is reachable from any state."
+    },
+    "created": {
+      "type": "string",
+      "format": "date",
+      "description": "Creation date in ISO 8601 format (YYYY-MM-DD). Set once at WID creation, never modified."
+    },
+    "author": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Creator of the WID. Use @-prefixed handles (e.g., @ehammond, @claude-agent) for consistency with changelog entries."
+    },
+    "parent": {
+      "type": "string",
+      "pattern": "^WID-[0-9]{3,}$",
+      "description": "Parent WID in the hierarchy. An epic contains features/tasks; a feature contains tasks/bugs. Leaf types (task, bug, spike, chore) cannot be parents."
+    },
+    "depends_on": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^WID-[0-9]{3,}$"
+      },
+      "uniqueItems": true,
+      "description": "WIDs that must reach 'done' before this WID can begin execution. Expresses execution ordering, separate from hierarchy."
+    },
+    "blocks": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^WID-[0-9]{3,}$"
+      },
+      "uniqueItems": true,
+      "description": "WIDs that cannot begin until this WID reaches 'done'. Inverse of depends_on — maintained for convenience and cross-referencing."
+    },
+    "priority": {
+      "type": "string",
+      "enum": ["critical", "high", "medium", "low"],
+      "description": "Execution priority. Used by the execution runtime to order the work queue when multiple WIDs are actionable."
+    },
+    "labels": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true,
+      "description": "Free-form tags for filtering and grouping (e.g., 'auth', 'backend', 'tech-debt'). No controlled vocabulary — conventions emerge per project."
+    },
+    "assignee": {
+      "type": "string",
+      "description": "Current owner responsible for execution. Can be a human (@ehammond) or agent (@claude-agent). Blank means unassigned and available for pickup."
+    },
+    "estimate": {
+      "type": "string",
+      "pattern": "^[0-9]+(\\.[0-9]+)?[mhd]$",
+      "description": "Estimated effort. Format: number + unit (m=minutes, h=hours, d=days). Examples: '30m', '2h', '0.5d'. Intentionally coarse — precise estimates are false precision."
+    },
+    "due": {
+      "type": "string",
+      "format": "date",
+      "description": "Target completion date in ISO 8601 format (YYYY-MM-DD). A goal, not a guarantee — useful for projection layer deadline views."
+    },
+    "branch": {
+      "type": "string",
+      "description": "Git branch associated with this WID's implementation. Convention: wid/WID-NNN-slug (e.g., 'wid/WID-001-oauth-google')."
+    },
+    "pr": {
+      "oneOf": [
+        { "type": "string", "format": "uri" },
+        {
+          "type": "array",
+          "items": { "type": "string", "format": "uri" },
+          "uniqueItems": true
+        }
+      ],
+      "description": "Pull request URL(s) implementing this WID. String for a single PR, array for multiple (e.g., split PRs across repos)."
+    },
+    "context": {
+      "type": "object",
+      "description": "Structured codebase context giving agents precise starting points and semantic descriptions that survive refactors.",
+      "properties": {
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path"],
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Exact file path relative to repo root. Gives agents a precise starting point."
+              },
+              "role": {
+                "type": "string",
+                "description": "Semantic description of what this file does in the context of the WID. Survives renames — agents can relocate via search if the path moves."
+              },
+              "glob": {
+                "type": "string",
+                "description": "Broader glob pattern capturing related files (e.g., 'src/auth/oauth*.py'). Naturally includes new files matching the pattern."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "modules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Module or package name."
+              },
+              "description": {
+                "type": "string",
+                "description": "What this module does and why it's relevant to the WID."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "apis": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["endpoint"],
+            "properties": {
+              "endpoint": {
+                "type": "string",
+                "description": "API endpoint (e.g., 'POST /api/v1/auth/login'). Include HTTP method."
+              },
+              "description": {
+                "type": "string",
+                "description": "What this endpoint does and its relevance to the WID."
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "patternProperties": {
+    "^x-": {
+      "description": "Extension fields. Use the x- prefix for project-specific custom metadata (e.g., x-team, x-sprint, x-cost-center). Keeps the core namespace clean while allowing arbitrary extensions."
+    }
+  },
+  "additionalProperties": false
+}
